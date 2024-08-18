@@ -38,7 +38,7 @@ def lambda_handler(event, context):
                     "total": 500.00,
                     "points_to_aliadito": 3000,
                     "points_to_client": 40,
-                    "payment_concept": "Alimentos",
+                    "payment_concept": "Mandado",
                 }
                     ),
                 'EventBusName': 'event-bus'

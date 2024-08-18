@@ -1,0 +1,3 @@
+aws_region              = "us-east-2"
+sso_shared_config_files = ["/{PATH}/.aws/config"]
+sso_profile             = "Administrator_Access_SSO-XXXXXXXXXXXXXXX"

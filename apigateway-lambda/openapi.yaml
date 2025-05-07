@@ -1,0 +1,70 @@
+openapi: 3.0.1
+info:
+  title: Lambda API
+  description: API Gateway integration with Lambda function
+  version: '1.0'
+servers:
+  - url: '{apiGatewayUrl}'
+    variables:
+      apiGatewayUrl:
+        default: https://api.example.com
+        description: API Gateway URL
+
+paths:
+  /hello:
+    get:
+      summary: Get hello message
+      description: Returns a hello message and echoes back the input
+      parameters:
+        - name: name
+          in: query
+          description: Name to customize the greeting (optional)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+                example: "*"
+            Content-Type:
+              schema:
+                type: string
+                example: application/json
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Hello from Lambda!"
+                  input:
+                    type: object
+                    description: Echo of the input event
+                    properties:
+                      httpMethod:
+                        type: string
+                        example: "GET"
+                      path:
+                        type: string
+                        example: "/hello"
+                      queryStringParameters:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            example: "TestUser"
+                      headers:
+                        type: object
+                        properties:
+                          Content-Type:
+                            type: string
+                            example: "application/json"
+
+components:
+  schemas: {}
+  securitySchemes: {}

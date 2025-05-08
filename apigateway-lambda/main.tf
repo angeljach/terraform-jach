@@ -60,50 +60,72 @@ resource "aws_lambda_function" "api_lambda" {
 }
 
 # --- API Gateway ---
-resource "aws_api_gateway_rest_api" "api" {
-  name = "${var.resource_prefix}-api"
-  description = "API Gateway with OpenAPI specification"
-  
-  body = file("${path.module}/openapi.yaml")
+resource "aws_api_gateway_rest_api" "my_api" {
+  name        = "${var.resource_prefix}-api"
+  description = "Example API Gateway managed by Terraform"
 
   endpoint_configuration {
-    types = ["REGIONAL"]
+    types = ["REGIONAL"] # Or "EDGE" for CloudFront distribution
   }
   tags = local.common_tags
+}
+
+# Resource: /hello
+resource "aws_api_gateway_resource" "hello_resource" {
+  rest_api_id = aws_api_gateway_rest_api.my_api.id
+  parent_id   = aws_api_gateway_rest_api.my_api.root_resource_id # Attach to the root
+  path_part   = "hello"                                        # The path segment (e.g., /hello)
+}
+
+# Method: GET on /hello
+resource "aws_api_gateway_method" "get_hello" {
+  rest_api_id   = aws_api_gateway_rest_api.my_api.id
+  resource_id   = aws_api_gateway_resource.hello_resource.id
+  http_method   = "GET"
+  authorization = "NONE" # No authorization for this example
+}
+
+# Integration between GET /hello and the Lambda function
+resource "aws_api_gateway_integration" "lambda_integration" {
+  rest_api_id = aws_api_gateway_rest_api.my_api.id
+  resource_id = aws_api_gateway_resource.hello_resource.id
+  http_method = aws_api_gateway_method.get_hello.http_method
+
+  integration_http_method = "POST" # Lambda integrations always use POST
+  type                    = "AWS_PROXY" # Use Lambda proxy integration
+  uri                     = aws_lambda_function.api_lambda.invoke_arn
 }
 
 # --- API Gateway Deployment & Stage ---
 # A deployment is required to make the API accessible
 resource "aws_api_gateway_deployment" "api_deployment" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  
+  rest_api_id = aws_api_gateway_rest_api.my_api.id
+
+  # Terraform needs to know when to create a new deployment.
+  # This can be triggered by changes in resources, methods, or integrations.
+  # A common way is to use a hash of the configuration or a timestamp.
   triggers = {
-    redeployment = sha1(file("${path.module}/openapi.yaml"))
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.hello_resource.id,
+      aws_api_gateway_method.get_hello.id,
+      aws_api_gateway_integration.lambda_integration.id,
+    ]))
   }
 
   lifecycle {
-    create_before_destroy = true
+    create_before_destroy = true # Important for avoiding downtime during updates
   }
+
+  # Note: The 'stage_name' attribute is not directly set here for the deployment resource itself.
+  # Instead, we create an aws_api_gateway_stage resource and associate it.
 }
 
 # Stage for the deployment (e.g., dev, test, prod)
 resource "aws_api_gateway_stage" "api_stage" {
   deployment_id = aws_api_gateway_deployment.api_deployment.id
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  stage_name    = "dev"
+  rest_api_id   = aws_api_gateway_rest_api.my_api.id
+  stage_name    = var.api_stage_name
   tags = local.common_tags
-}
-
-# Add method settings for throttling
-resource "aws_api_gateway_method_settings" "api_throttling" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  stage_name  = aws_api_gateway_stage.api_stage.stage_name
-  method_path = "*/*"  # This applies to all methods
-
-  settings {
-    throttling_burst_limit = 5
-    throttling_rate_limit  = 10
-  }
 }
 
 # --- Lambda Permission ---
@@ -117,5 +139,5 @@ resource "aws_lambda_permission" "apigw_lambda_permission" {
   # The "/*/*" source ARN allows any method on any resource in this API to invoke the Lambda.
   # For more granular control, you can restrict this.
   # Example: arn:aws:execute-api:REGION:ACCOUNT_ID:API_ID/STAGE/METHOD/RESOURCE_PATH
-  source_arn = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
+  source_arn = "${aws_api_gateway_rest_api.my_api.execution_arn}/*/${aws_api_gateway_method.get_hello.http_method}${aws_api_gateway_resource.hello_resource.path}"
 }
